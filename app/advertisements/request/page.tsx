@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, ArrowLeft } from "lucide-react"
+import { Loader2, ArrowLeft, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,6 +38,7 @@ interface FormData {
   content: string;
   type: AdvertisementType;
   imageUrl: string;
+  imageFile: File | null;
   url: string;
   budget: number;
   startDate: Date;
@@ -70,6 +71,7 @@ export default function RequestAdvertisement() {
       content: "",
       type: "listing",
       imageUrl: "",
+      imageFile: null,
       url: "",
       budget: adTypePrices.listing,
       startDate: tomorrow,
@@ -169,16 +171,26 @@ export default function RequestAdvertisement() {
     })
   }
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData({ ...formData, imageFile: file });
+      // Create a temporary URL for preview
+      const imageUrl = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, imageUrl }));
+    }
+  };
+
   return (
     <div className="container max-w-4xl mx-auto py-8">
       <div className="mb-8">
         <Button
           variant="ghost"
           className="mb-4"
-          onClick={() => router.push("/advertisements")}
+          onClick={() => router.push("/advertisements/my-requests")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Advertisements
+          Back to My Requests
         </Button>
         <h1 className="text-3xl font-bold">Request Advertisement</h1>
         <p className="text-gray-500 mt-2">
@@ -294,7 +306,35 @@ export default function RequestAdvertisement() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="imageUrl">Image URL</Label>
+                <Label htmlFor="image">Advertisement Image</Label>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Input
+                      id="image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="cursor-pointer"
+                    />
+                  </div>
+                  {formData.imageUrl && (
+                    <div className="relative w-20 h-20 rounded-lg overflow-hidden">
+                      <img
+                        src={formData.imageUrl}
+                        alt="Preview"
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500">
+                  Upload a high-quality image for your advertisement (optional).
+                  Recommended size: 1200x800 pixels.
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="imageUrl">Image URL (Alternative)</Label>
                 <Input
                   id="imageUrl"
                   type="url"
@@ -307,7 +347,7 @@ export default function RequestAdvertisement() {
                   <p className="text-sm text-red-500">{errors.imageUrl}</p>
                 )}
                 <p className="text-sm text-gray-500">
-                  Provide a URL to a high-quality image for your advertisement.
+                  Alternatively, provide a URL to a high-quality image for your advertisement.
                   The image should be at least 1200x800 pixels.
                 </p>
               </div>

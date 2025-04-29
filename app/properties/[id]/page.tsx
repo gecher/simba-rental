@@ -426,9 +426,9 @@ const mockProperties = {
   },
 }
 
-export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function PropertyDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { id } = use(params)
+  const { id } = params
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
@@ -452,6 +452,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
     null
   >(null)
   const [recurringEndDate, setRecurringEndDate] = useState<Date | null>(null)
+  const [propertyExists, setPropertyExists] = useState(true)
 
   useEffect(() => {
     // Check if user is logged in
@@ -459,7 +460,12 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
     if (storedUser) {
       setUser(JSON.parse(storedUser))
     }
-  }, [])
+
+    // Check if property exists
+    if (!mockProperties[id as keyof typeof mockProperties]) {
+      setPropertyExists(false)
+    }
+  }, [id])
 
   // Get property data
   const property = mockProperties[id as keyof typeof mockProperties] || {
@@ -469,10 +475,10 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
     location: "Unknown",
     price: 0,
     rating: 0,
-    description: "This property could not be found.",
+    description: "This property could not be found. Please check the URL or return to the properties page.",
     features: [],
     amenities: [],
-    images: ["/placeholder.svg?height=400&width=600"],
+    images: ["/placeholder.jpg"],
     reviews: [],
   }
 
@@ -700,7 +706,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
       <main className="flex-1">
         <div className="container py-8">
           <div className="mb-6">
-            <Link href="/" className="flex items-center gap-2 text-primary hover:underline mb-4">
+            <Link href="/properties" className="flex items-center gap-2 text-primary hover:underline mb-4">
               <ArrowLeft className="h-4 w-4" />
               <span>Back to Properties</span>
             </Link>
@@ -722,358 +728,386 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
-            <div>
-              {/* Property Images */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <div className="col-span-1 md:col-span-2 aspect-video overflow-hidden rounded-lg">
-                  <img
-                    src={property.images[0] || "/placeholder.svg"}
-                    alt={property.title}
-                    className="h-full w-full object-cover"
-                  />
+          {!propertyExists ? (
+            <Card className="p-6">
+              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Property Not Found</h2>
+                <p className="text-muted-foreground mb-6">
+                  The property you're looking for doesn't exist or has been removed.
+                </p>
+                <div className="flex gap-4">
+                  <Button asChild>
+                    <Link href="/properties">Browse All Properties</Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/">Return to Home</Link>
+                  </Button>
                 </div>
-                {property.images.slice(1, 3).map((image, index) => (
-                  <div key={index} className="aspect-video overflow-hidden rounded-lg">
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
+              <div>
+                {/* Property Images */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="col-span-1 md:col-span-2 aspect-video overflow-hidden rounded-lg">
                     <img
-                      src={image || "/placeholder.svg"}
-                      alt={`${property.title} ${index + 2}`}
+                      src={property.images[0] || "/placeholder.jpg"}
+                      alt={property.title}
                       className="h-full w-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = "/placeholder.jpg";
+                      }}
                     />
                   </div>
-                ))}
+                  {property.images.slice(1, 3).map((image, index) => (
+                    <div key={index} className="aspect-video overflow-hidden rounded-lg">
+                      <img
+                        src={image || "/placeholder.jpg"}
+                        alt={`${property.title} ${index + 2}`}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = "/placeholder.jpg";
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Property Tabs */}
+                <Tabs defaultValue="details" className="mb-8" onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="details">Details</TabsTrigger>
+                    <TabsTrigger value="amenities">Amenities</TabsTrigger>
+                    <TabsTrigger value="reviews">Reviews</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="details" className="pt-6">
+                    <div className="prose max-w-none">
+                      <h2 className="text-xl font-semibold mb-4">About this property</h2>
+                      <p>{property.description}</p>
+                    </div>
+                    <div className="mt-6">
+                      <h2 className="text-xl font-semibold mb-4">Features</h2>
+                      <ul className="grid grid-cols-2 gap-2">
+                        {property.features.map((feature, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <Star className="h-4 w-4 text-primary" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="amenities" className="pt-6">
+                    <h2 className="text-xl font-semibold mb-4">Amenities</h2>
+                    <PropertyAmenities amenities={property.amenities} />
+                  </TabsContent>
+                  <TabsContent value="reviews" className="pt-6">
+                    <h2 className="text-xl font-semibold mb-4">Reviews</h2>
+                    <PropertyReviews
+                      propertyId={property.id}
+                      reviews={property.reviews}
+                      currentUser={currentUserForReviews}
+                    />
+                  </TabsContent>
+                </Tabs>
               </div>
+              <div>
+                <Card className="sticky top-24">
+                  {bookingStep === "selection" && (
+                    <>
+                      <CardHeader>
+                        <CardTitle>Book this property</CardTitle>
+                        <CardDescription>Select dates and time slots to book</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        {!user && (
+                          <Alert className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Sign in required</AlertTitle>
+                            <AlertDescription>
+                              You need to{" "}
+                              <Link href="/sign-in" className="font-medium underline">
+                                sign in
+                              </Link>{" "}
+                              or{" "}
+                              <Link href="/sign-up" className="font-medium underline">
+                                create an account
+                              </Link>{" "}
+                              to complete your booking.
+                            </AlertDescription>
+                          </Alert>
+                        )}
 
-              {/* Property Tabs */}
-              <Tabs defaultValue="details" className="mb-8" onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="details">Details</TabsTrigger>
-                  <TabsTrigger value="amenities">Amenities</TabsTrigger>
-                  <TabsTrigger value="reviews">Reviews</TabsTrigger>
-                </TabsList>
-                <TabsContent value="details" className="pt-6">
-                  <div className="prose max-w-none">
-                    <h2 className="text-xl font-semibold mb-4">About this property</h2>
-                    <p>{property.description}</p>
-                  </div>
-                  <div className="mt-6">
-                    <h2 className="text-xl font-semibold mb-4">Features</h2>
-                    <ul className="grid grid-cols-2 gap-2">
-                      {property.features.map((feature, index) => (
-                        <li key={index} className="flex items-center gap-2">
-                          <Star className="h-4 w-4 text-primary" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </TabsContent>
-                <TabsContent value="amenities" className="pt-6">
-                  <h2 className="text-xl font-semibold mb-4">Amenities</h2>
-                  <PropertyAmenities amenities={property.amenities} />
-                </TabsContent>
-                <TabsContent value="reviews" className="pt-6">
-                  <h2 className="text-xl font-semibold mb-4">Reviews</h2>
-                  <PropertyReviews
-                    propertyId={property.id}
-                    reviews={property.reviews}
-                    currentUser={currentUserForReviews}
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-            <div>
-              <Card className="sticky top-24">
-                {bookingStep === "selection" && (
-                  <>
-                    <CardHeader>
-                      <CardTitle>Book this property</CardTitle>
-                      <CardDescription>Select dates and time slots to book</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {!user && (
-                        <Alert className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Sign in required</AlertTitle>
-                          <AlertDescription>
-                            You need to{" "}
-                            <Link href="/sign-in" className="font-medium underline">
-                              sign in
-                            </Link>{" "}
-                            or{" "}
-                            <Link href="/sign-up" className="font-medium underline">
-                              create an account
-                            </Link>{" "}
-                            to complete your booking.
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="recurring-booking"
+                            checked={isRecurringBooking}
+                            onCheckedChange={handleRecurringToggle}
+                          />
+                          <Label htmlFor="recurring-booking" className="flex items-center gap-1.5">
+                            <Repeat className="h-4 w-4" />
+                            Recurring Booking
+                          </Label>
+                        </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="recurring-booking"
-                          checked={isRecurringBooking}
-                          onCheckedChange={handleRecurringToggle}
-                        />
-                        <Label htmlFor="recurring-booking" className="flex items-center gap-1.5">
-                          <Repeat className="h-4 w-4" />
-                          Recurring Booking
-                        </Label>
-                      </div>
-
-                      {/* Non-recurring booking flow */}
-                      {!isRecurringBooking && (
-                        <div className="space-y-6">
-                          <div>
-                            <h3 className="font-medium mb-2 flex items-center gap-2">
-                              <CalendarDays className="h-4 w-4" />
-                              Select Date
-                            </h3>
-                            <SmartCalendar onDateSelect={handleDateSelect} />
-                          </div>
-
-                          {selectedDate && (
+                        {/* Non-recurring booking flow */}
+                        {!isRecurringBooking && (
+                          <div className="space-y-6">
                             <div>
                               <h3 className="font-medium mb-2 flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                Select Time Slots
+                                <CalendarDays className="h-4 w-4" />
+                                Select Date
                               </h3>
-                              <TimeSlotSelector
-                                date={selectedDate}
-                                basePrice={property.price}
-                                onSlotsSelected={handleSlotSelect}
-                              />
+                              <SmartCalendar onDateSelect={handleDateSelect} />
                             </div>
-                          )}
 
-                          {selectedSlots.length > 0 && (
-                            <BookingSummary
-                              propertyTitle={property.title}
-                              date={selectedDate!}
-                              slots={selectedSlots}
-                              totalPrice={totalPrice}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* Recurring booking flow */}
-                      {isRecurringBooking && (
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="font-medium mb-2 flex items-center gap-2">
-                              <Repeat className="h-4 w-4" />
-                              Recurring Pattern
-                            </h3>
-                            <Select
-                              value={recurringPattern || ""}
-                              onValueChange={(value: any) => handleRecurringPatternChange(value)}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select recurring pattern" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="daily">Daily</SelectItem>
-                                <SelectItem value="weekdays">Weekdays Only (Mon-Fri)</SelectItem>
-                                <SelectItem value="weekends">Weekends Only (Sat-Sun)</SelectItem>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="biweekly">Every 2 Weeks</SelectItem>
-                                <SelectItem value="monthly">Monthly (Same Date)</SelectItem>
-                                <SelectItem value="monthly_first">Monthly (First Day)</SelectItem>
-                                <SelectItem value="monthly_last">Monthly (Last Day)</SelectItem>
-                                <SelectItem value="quarterly">Every 3 Months</SelectItem>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            {recurringPattern && (
-                              <div className="text-sm text-muted-foreground mt-2">
-                                {recurringPattern === "daily" && "Booking will repeat every day"}
-                                {recurringPattern === "weekdays" && "Booking will repeat Monday through Friday"}
-                                {recurringPattern === "weekends" && "Booking will repeat Saturday and Sunday"}
-                                {recurringPattern === "weekly" && "Booking will repeat on the same day every week"}
-                                {recurringPattern === "biweekly" && "Booking will repeat every two weeks"}
-                                {recurringPattern === "monthly" && "Booking will repeat on the same date every month"}
-                                {recurringPattern === "monthly_first" && "Booking will repeat on the first day of every month"}
-                                {recurringPattern === "monthly_last" && "Booking will repeat on the last day of every month"}
-                                {recurringPattern === "quarterly" && "Booking will repeat every three months"}
-                                {recurringPattern === "yearly" && "Booking will repeat on the same date every year"}
+                            {selectedDate && (
+                              <div>
+                                <h3 className="font-medium mb-2 flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  Select Time Slots
+                                </h3>
+                                <TimeSlotSelector
+                                  date={selectedDate}
+                                  basePrice={property.price}
+                                  onSlotsSelected={handleSlotSelect}
+                                />
                               </div>
                             )}
-                          </div>
 
-                          {recurringPattern && (
-                        <>
-                          <div>
-                            <h3 className="font-medium mb-2 flex items-center gap-2">
-                              <CalendarDays className="h-4 w-4" />
-                                  Start Date
-                            </h3>
-                                <SmartCalendar onDateSelect={handleDateSelect} />
+                            {selectedSlots.length > 0 && (
+                              <BookingSummary
+                                propertyTitle={property.title}
+                                date={selectedDate!}
+                                slots={selectedSlots}
+                                totalPrice={totalPrice}
+                              />
+                            )}
                           </div>
+                        )}
 
-                              {selectedDate && (
+                        {/* Recurring booking flow */}
+                        {isRecurringBooking && (
+                          <div className="space-y-4">
+                            <div>
+                              <h3 className="font-medium mb-2 flex items-center gap-2">
+                                <Repeat className="h-4 w-4" />
+                                Recurring Pattern
+                              </h3>
+                              <Select
+                                value={recurringPattern || ""}
+                                onValueChange={(value: any) => handleRecurringPatternChange(value)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select recurring pattern" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="daily">Daily</SelectItem>
+                                  <SelectItem value="weekdays">Weekdays Only (Mon-Fri)</SelectItem>
+                                  <SelectItem value="weekends">Weekends Only (Sat-Sun)</SelectItem>
+                                  <SelectItem value="weekly">Weekly</SelectItem>
+                                  <SelectItem value="biweekly">Every 2 Weeks</SelectItem>
+                                  <SelectItem value="monthly">Monthly (Same Date)</SelectItem>
+                                  <SelectItem value="monthly_first">Monthly (First Day)</SelectItem>
+                                  <SelectItem value="monthly_last">Monthly (Last Day)</SelectItem>
+                                  <SelectItem value="quarterly">Every 3 Months</SelectItem>
+                                  <SelectItem value="yearly">Yearly</SelectItem>
+                                </SelectContent>
+                              </Select>
+
+                              {recurringPattern && (
+                                <div className="text-sm text-muted-foreground mt-2">
+                                  {recurringPattern === "daily" && "Booking will repeat every day"}
+                                  {recurringPattern === "weekdays" && "Booking will repeat Monday through Friday"}
+                                  {recurringPattern === "weekends" && "Booking will repeat Saturday and Sunday"}
+                                  {recurringPattern === "weekly" && "Booking will repeat on the same day every week"}
+                                  {recurringPattern === "biweekly" && "Booking will repeat every two weeks"}
+                                  {recurringPattern === "monthly" && "Booking will repeat on the same date every month"}
+                                  {recurringPattern === "monthly_first" && "Booking will repeat on the first day of every month"}
+                                  {recurringPattern === "monthly_last" && "Booking will repeat on the last day of every month"}
+                                  {recurringPattern === "quarterly" && "Booking will repeat every three months"}
+                                  {recurringPattern === "yearly" && "Booking will repeat on the same date every year"}
+                                </div>
+                              )}
+                            </div>
+
+                            {recurringPattern && (
+                              <>
                                 <div>
                                   <h3 className="font-medium mb-2 flex items-center gap-2">
                                     <CalendarDays className="h-4 w-4" />
-                                    End Date
+                                    Start Date
                                   </h3>
-                                  <SmartCalendar onDateSelect={(date) => handleEndDateSelect(date || null)} />
-                                  <div className="text-sm text-amber-600 mt-2">
-                                    <AlertCircle className="h-4 w-4 inline mr-1" />
-                                    Maximum booking duration is 1 year
-                                  </div>
+                                  <SmartCalendar onDateSelect={handleDateSelect} />
                                 </div>
-                              )}
-                            </>
-                          )}
 
-                          {selectedDates.length > 0 && (
-                            <div className="rounded-lg border p-4">
-                              <h4 className="font-medium mb-2">Selected Recurring Dates:</h4>
-                              <div className="space-y-1">
-                                {selectedDates.map((date, index) => (
-                                  <div key={index} className="text-sm">
-                                    {date.toLocaleDateString()}
+                                {selectedDate && (
+                                  <div>
+                                    <h3 className="font-medium mb-2 flex items-center gap-2">
+                                      <CalendarDays className="h-4 w-4" />
+                                      End Date
+                                    </h3>
+                                    <SmartCalendar onDateSelect={(date) => handleEndDateSelect(date || null)} />
+                                    <div className="text-sm text-amber-600 mt-2">
+                                      <AlertCircle className="h-4 w-4 inline mr-1" />
+                                      Maximum booking duration is 1 year
+                                    </div>
                                   </div>
-                                ))}
+                                )}
+                              </>
+                            )}
+
+                            {selectedDates.length > 0 && (
+                              <div className="rounded-lg border p-4">
+                                <h4 className="font-medium mb-2">Selected Recurring Dates:</h4>
+                                <div className="space-y-1">
+                                  {selectedDates.map((date, index) => (
+                                    <div key={index} className="text-sm">
+                                      {date.toLocaleDateString()}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {selectedDate && recurringPattern && (
-                            <div>
-                              <h3 className="font-medium mb-2 flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                Select Time Slots
-                              </h3>
-                              <p className="text-sm text-muted-foreground mb-2">
-                                These time slots will be applied to all recurring dates
-                              </p>
-                              <TimeSlotSelector
-                                date={selectedDate}
-                                basePrice={property.price}
-                                onSlotsSelected={handleSlotSelect}
+                            {selectedDate && recurringPattern && (
+                              <div>
+                                <h3 className="font-medium mb-2 flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  Select Time Slots
+                                </h3>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  These time slots will be applied to all recurring dates
+                                </p>
+                                <TimeSlotSelector
+                                  date={selectedDate}
+                                  basePrice={property.price}
+                                  onSlotsSelected={handleSlotSelect}
+                                />
+                              </div>
+                            )}
+
+                            {selectedDates.length > 0 && selectedSlots.length > 0 && (
+                              <RecurringBookingSummary
+                                propertyTitle={property.title}
+                                dates={selectedDates}
+                                slots={selectedSlots}
+                                pricePerBooking={property.price * selectedSlots.length}
                               />
-                            </div>
-                          )}
-
-                          {selectedDates.length > 0 && selectedSlots.length > 0 && (
-                            <RecurringBookingSummary
-                              propertyTitle={property.title}
-                              dates={selectedDates}
-                              slots={selectedSlots}
-                              pricePerBooking={property.price * selectedSlots.length}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                    <CardFooter>
-                      <Button
-                        className="w-full"
-                        size="lg"
-                        disabled={
-                          (isRecurringBooking && (selectedDates.length === 0 || selectedSlots.length === 0)) ||
-                          (!isRecurringBooking && selectedSlots.length === 0)
-                        }
-                        onClick={handleProceedToPayment}
-                      >
-                        {isRecurringBooking
-                          ? `Proceed to Payment ($${totalPrice})`
-                          : `Proceed to Payment ($${totalPrice})`}
-                      </Button>
-                    </CardFooter>
-                  </>
-                )}
-
-                {bookingStep === "payment" && (
-                  <PaymentForm
-                    totalAmount={totalPrice}
-                    onPaymentComplete={handlePaymentComplete}
-                    onCancel={handleCancelPayment}
-                  />
-                )}
-
-                {bookingStep === "confirmation" && (
-                  <>
-                    <CardHeader>
-                      <CardTitle>Booking Confirmed!</CardTitle>
-                      <CardDescription>Your booking has been successfully completed</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="rounded-lg bg-green-50 p-4 text-green-800">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-5 w-5" />
-                          <h3 className="font-semibold">Thank you for your booking</h3>
-                        </div>
-                        <p className="mt-2 text-sm">
-                          A confirmation email has been sent to your email address. You can view your booking details in
-                          your account.
-                        </p>
-                      </div>
-
-                      <div className="border rounded-lg p-4">
-                        <div className="text-center mb-4">
-                          <h3 className="font-bold text-lg">SIMBA RENTAL</h3>
-                          <p className="text-sm text-muted-foreground">Property Rental Receipt</p>
-                        </div>
-                        
-                        <div className="space-y-2 border-t border-b py-3 my-3">
-                          <div className="flex justify-between">
-                            <span className="text-sm">Receipt #:</span>
-                            <span className="text-sm font-medium">{bookingId || `BK-${Math.floor(Math.random() * 10000)}`}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Date:</span>
-                            <span className="text-sm font-medium">{new Date().toLocaleDateString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Property:</span>
-                            <span className="text-sm font-medium">{property.title}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Location:</span>
-                            <span className="text-sm font-medium">{property.location}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-sm">Payment Method:</span>
-                            <span className="text-sm font-medium">{localStorage.getItem("paymentMethod") || "Credit Card"}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center font-bold text-lg">
-                          <span>Total Amount:</span>
-                          <span>${totalPrice.toFixed(2)}</span>
-                        </div>
-                        
-                        {localStorage.getItem("paymentMethod") === "cash" && (
-                          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                            <p className="text-sm text-amber-800 font-medium">
-                              <span className="font-bold">CASH PAYMENT REMINDER:</span> Please bring the exact amount of ${totalPrice.toFixed(2)} in cash when you arrive at the property.
-                            </p>
+                            )}
                           </div>
                         )}
-                        
-                        <div className="mt-4 text-center text-xs text-muted-foreground">
-                          <p>Thank you for choosing Simba Rental!</p>
-                          <p>This receipt serves as proof of your booking.</p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          disabled={
+                            (isRecurringBooking && (selectedDates.length === 0 || selectedSlots.length === 0)) ||
+                            (!isRecurringBooking && selectedSlots.length === 0)
+                          }
+                          onClick={handleProceedToPayment}
+                        >
+                          {isRecurringBooking
+                            ? `Proceed to Payment ($${totalPrice})`
+                            : `Proceed to Payment ($${totalPrice})`}
+                        </Button>
+                      </CardFooter>
+                    </>
+                  )}
+
+                  {bookingStep === "payment" && (
+                    <PaymentForm
+                      totalAmount={totalPrice}
+                      onPaymentComplete={handlePaymentComplete}
+                      onCancel={handleCancelPayment}
+                    />
+                  )}
+
+                  {bookingStep === "confirmation" && (
+                    <>
+                      <CardHeader>
+                        <CardTitle>Booking Confirmed!</CardTitle>
+                        <CardDescription>Your booking has been successfully completed</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="rounded-lg bg-green-50 p-4 text-green-800">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <h3 className="font-semibold">Thank you for your booking</h3>
+                          </div>
+                          <p className="mt-2 text-sm">
+                            A confirmation email has been sent to your email address. You can view your booking details in
+                            your account.
+                          </p>
                         </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="flex flex-col gap-2">
-                      <Button className="w-full" onClick={handleNewBooking}>
-                        Make Another Booking
-                      </Button>
-                      <Button variant="outline" className="w-full" asChild>
-                        <Link href="/">Return to Homepage</Link>
-                      </Button>
-                    </CardFooter>
-                  </>
-                )}
-              </Card>
+
+                        <div className="border rounded-lg p-4">
+                          <div className="text-center mb-4">
+                            <h3 className="font-bold text-lg">SIMBA RENTAL</h3>
+                            <p className="text-sm text-muted-foreground">Property Rental Receipt</p>
+                          </div>
+                          
+                          <div className="space-y-2 border-t border-b py-3 my-3">
+                            <div className="flex justify-between">
+                              <span className="text-sm">Receipt #:</span>
+                              <span className="text-sm font-medium">{bookingId || `BK-${Math.floor(Math.random() * 10000)}`}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Date:</span>
+                              <span className="text-sm font-medium">{new Date().toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Property:</span>
+                              <span className="text-sm font-medium">{property.title}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Location:</span>
+                              <span className="text-sm font-medium">{property.location}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm">Payment Method:</span>
+                              <span className="text-sm font-medium">{localStorage.getItem("paymentMethod") || "Credit Card"}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center font-bold text-lg">
+                            <span>Total Amount:</span>
+                            <span>${totalPrice.toFixed(2)}</span>
+                          </div>
+                          
+                          {localStorage.getItem("paymentMethod") === "cash" && (
+                            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                              <p className="text-sm text-amber-800 font-medium">
+                                <span className="font-bold">CASH PAYMENT REMINDER:</span> Please bring the exact amount of ${totalPrice.toFixed(2)} in cash when you arrive at the property.
+                              </p>
+                            </div>
+                          )}
+                          
+                          <div className="mt-4 text-center text-xs text-muted-foreground">
+                            <p>Thank you for choosing Simba Rental!</p>
+                            <p>This receipt serves as proof of your booking.</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="flex flex-col gap-2">
+                        <Button className="w-full" onClick={handleNewBooking}>
+                          Make Another Booking
+                        </Button>
+                        <Button variant="outline" className="w-full" asChild>
+                          <Link href="/">Return to Homepage</Link>
+                        </Button>
+                      </CardFooter>
+                    </>
+                  )}
+                </Card>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

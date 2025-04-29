@@ -14,8 +14,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, MessageCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ArrowLeft, MessageCircle, Upload, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { format } from 'date-fns';
 
 const defaultAd: Partial<Advertisement> = {
   title: "",
@@ -24,6 +36,7 @@ const defaultAd: Partial<Advertisement> = {
   type: "listing" as AdvertisementType,
   status: "pending" as AdvertisementStatus,
   imageUrl: "",
+  uploadedImage: null,
   startDate: null,
   expiryDate: null,
   targeting: {
@@ -228,12 +241,40 @@ export default function AdvertisementsPage() {
   const [newAd, setNewAd] = useState<Partial<Advertisement>>(defaultAd);
   const [isCreating, setIsCreating] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [approvalDialog, setApprovalDialog] = useState<{
+    isOpen: boolean;
+    adId: string | null;
+    action: 'approve' | 'reject' | null;
+  }>({
+    isOpen: false,
+    adId: null,
+    action: null,
+  });
 
-  const handleCreateAd = () => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setNewAd({ ...newAd, uploadedImage: file });
+    }
+  };
+
+  const handleCreateAd = async () => {
     const now = new Date();
+    let imageUrl = newAd.imageUrl;
+
+    if (selectedFile) {
+      // Here you would typically upload the file to your storage service
+      // and get back a URL. For now, we'll create a temporary object URL
+      imageUrl = URL.createObjectURL(selectedFile);
+    }
+
     const ad: Advertisement = {
       ...defaultAd,
+      ...newAd,
       id: Math.random().toString(36).substr(2, 9),
+      imageUrl: imageUrl,
       createdAt: now,
       updatedAt: now,
       createdBy: 'admin',
@@ -242,19 +283,37 @@ export default function AdvertisementsPage() {
     setAds([...ads, ad]);
     setIsCreating(false);
     setNewAd(defaultAd);
+    setSelectedFile(null);
   };
 
   const handleUpdateAdStatus = (adId: string, newStatus: AdvertisementStatus) => {
     setAds(ads.map(ad => {
       if (ad.id === adId) {
-        return {
+        const updatedAd = {
           ...ad,
           status: newStatus,
           updatedAt: new Date()
         };
+        
+        // Add a system message about the status change
+        const statusMessage: Message = {
+          id: Math.random().toString(36).substr(2, 9),
+          content: `Advertisement ${newStatus === 'approved' ? 'approved' : 'rejected'} by admin`,
+          senderId: "system",
+          senderType: "system",
+          timestamp: new Date(),
+          read: true
+        };
+        
+        return {
+          ...updatedAd,
+          messages: [...(updatedAd.messages || []), statusMessage]
+        };
       }
       return ad;
     }));
+    
+    setApprovalDialog({ isOpen: false, adId: null, action: null });
   };
 
   const handleSendMessage = (adId: string, content: string) => {
@@ -282,6 +341,20 @@ export default function AdvertisementsPage() {
     );
 
     setNewMessage('');
+  };
+
+  const getStatusBadge = (status: AdvertisementStatus) => {
+    const statusConfig = {
+      pending: { variant: "secondary", label: "Pending" },
+      approved: { variant: "success", label: "Approved" },
+      rejected: { variant: "destructive", label: "Rejected" },
+      active: { variant: "default", label: "Active" },
+      inactive: { variant: "secondary", label: "Inactive" },
+      expired: { variant: "secondary", label: "Expired" },
+    };
+
+    const config = statusConfig[status];
+    return <Badge variant={config.variant as any}>{config.label}</Badge>;
   };
 
   if (isCreating) {
@@ -341,15 +414,40 @@ export default function AdvertisementsPage() {
                 </Select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="imageUrl">Image URL</Label>
-                <Input
-                  id="imageUrl"
-                  value={newAd.imageUrl || ''}
-                  onChange={(e) => setNewAd({ ...newAd, imageUrl: e.target.value })}
-                  placeholder="Enter image URL"
-                  type="url"
-                />
+              <div className="grid gap-4">
+                <Label>Advertisement Image</Label>
+                <div className="grid gap-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="imageUpload" className="cursor-pointer">
+                      <div className="flex items-center gap-2 p-2 border-2 border-dashed rounded-lg hover:bg-gray-50">
+                        <Upload className="h-4 w-4" />
+                        <span>Upload Image</span>
+                      </div>
+                      <Input
+                        id="imageUpload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </Label>
+                    {selectedFile && (
+                      <p className="text-sm text-gray-500">
+                        Selected: {selectedFile.name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-500 mx-2">OR</span>
+                  </div>
+                  <Input
+                    id="imageUrl"
+                    value={newAd.imageUrl || ''}
+                    onChange={(e) => setNewAd({ ...newAd, imageUrl: e.target.value })}
+                    placeholder="Enter image URL"
+                    type="url"
+                  />
+                </div>
               </div>
 
               <div className="grid gap-2">
@@ -392,109 +490,333 @@ export default function AdvertisementsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manage Advertisements</h1>
-        <Button onClick={() => setIsCreating(true)}>Create New Ad</Button>
+    <div className="container max-w-6xl mx-auto py-8">
+      <div className="mb-8">
+        <Button
+          variant="ghost"
+          className="mb-4"
+          onClick={() => router.push('/admin')}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Admin Dashboard
+        </Button>
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Advertisement Management</h1>
+          <Button onClick={() => setIsCreating(true)}>Create New Advertisement</Button>
+        </div>
       </div>
 
-      <div className="grid gap-6">
-        {ads.map((ad) => (
-          <Card key={ad.id}>
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">{ad.title}</h3>
-                  <div className="flex items-center gap-4">
-                    <p className="text-gray-600">{ad.description}</p>
-                    <div className="flex items-center text-gray-500">
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                      <span className="text-sm">{ad.messages?.length || 0}</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Created: {ad.createdAt.toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {ad.status === 'pending' && (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleUpdateAdStatus(ad.id, 'approved')}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleUpdateAdStatus(ad.id, 'rejected')}
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
-                  {ad.status === 'active' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleUpdateAdStatus(ad.id, 'inactive')}
-                    >
-                      Deactivate
-                    </Button>
-                  )}
-                  {ad.status === 'inactive' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleUpdateAdStatus(ad.id, 'active')}
-                    >
-                      Activate
-                    </Button>
-                  )}
-                </div>
-              </div>
+      <Tabs defaultValue="pending" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="pending">Pending Requests</TabsTrigger>
+          <TabsTrigger value="active">Active Ads</TabsTrigger>
+          <TabsTrigger value="all">All Advertisements</TabsTrigger>
+        </TabsList>
 
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Messages</h4>
-                <div className="space-y-2">
-                  {ad.messages?.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`p-2 rounded ${
-                        message.senderType === 'admin'
-                          ? 'bg-blue-100 ml-auto'
-                          : 'bg-gray-100'
-                      }`}
+        <TabsContent value="pending" className="space-y-4">
+          {ads.filter(ad => ad.status === 'pending').map((ad) => (
+            <Card key={ad.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{ad.title}</CardTitle>
+                    <CardDescription>{ad.description}</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700"
+                      onClick={() => setApprovalDialog({ isOpen: true, adId: ad.id, action: 'approve' })}
                     >
-                      <p className="text-sm">{message.content}</p>
-                      <p className="text-xs text-gray-500">
-                        {message.timestamp.toLocaleString()}
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => setApprovalDialog({ isOpen: true, adId: ad.id, action: 'reject' })}
+                    >
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <Label>Type</Label>
+                      <p className="text-sm text-muted-foreground">{ad.type}</p>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Created</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {format(ad.createdAt, 'PPP')}
                       </p>
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <Label>Status</Label>
+                      {getStatusBadge(ad.status)}
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">Messages</h3>
+                    <ScrollArea className="h-[200px] mb-4">
+                      <div className="space-y-4">
+                        {ad.messages?.map((message) => (
+                          <div
+                            key={message.id}
+                            className={`flex ${
+                              message.senderType === 'admin' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[80%] rounded-lg p-3 ${
+                                message.senderType === 'admin'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted'
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <p className="text-xs opacity-70 mt-1">
+                                {format(message.timestamp, 'p')}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type your message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(ad.id, newMessage);
+                          }
+                        }}
+                      />
+                      <Button onClick={() => handleSendMessage(ad.id, newMessage)}>
+                        Send
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-2 flex gap-2">
-                  <Input
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSendMessage(ad.id, newMessage);
-                      }
-                    }}
-                  />
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="active" className="space-y-4">
+          {ads.filter(ad => ad.status === 'active').map((ad) => (
+            <Card key={ad.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{ad.title}</CardTitle>
+                    <CardDescription>{ad.description}</CardDescription>
+                  </div>
                   <Button
                     variant="outline"
-                    onClick={() => handleSendMessage(ad.id, newMessage)}
-                    disabled={!newMessage.trim()}
+                    size="sm"
+                    onClick={() => handleUpdateAdStatus(ad.id, 'inactive')}
                   >
-                    Send
+                    Deactivate
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <Label>Type</Label>
+                      <p className="text-sm text-muted-foreground">{ad.type}</p>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Created</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {format(ad.createdAt, 'PPP')}
+                      </p>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Status</Label>
+                      {getStatusBadge(ad.status)}
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">Messages</h3>
+                    <ScrollArea className="h-[200px] mb-4">
+                      <div className="space-y-4">
+                        {ad.messages?.map((message) => (
+                          <div
+                            key={message.id}
+                            className={`flex ${
+                              message.senderType === 'admin' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[80%] rounded-lg p-3 ${
+                                message.senderType === 'admin'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted'
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <p className="text-xs opacity-70 mt-1">
+                                {format(message.timestamp, 'p')}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type your message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(ad.id, newMessage);
+                          }
+                        }}
+                      />
+                      <Button onClick={() => handleSendMessage(ad.id, newMessage)}>
+                        Send
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="all" className="space-y-4">
+          {ads.map((ad) => (
+            <Card key={ad.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{ad.title}</CardTitle>
+                    <CardDescription>{ad.description}</CardDescription>
+                  </div>
+                  {getStatusBadge(ad.status)}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <Label>Type</Label>
+                      <p className="text-sm text-muted-foreground">{ad.type}</p>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Created</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {format(ad.createdAt, 'PPP')}
+                      </p>
+                    </div>
+                    <div className="flex-1">
+                      <Label>Status</Label>
+                      {getStatusBadge(ad.status)}
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">Messages</h3>
+                    <ScrollArea className="h-[200px] mb-4">
+                      <div className="space-y-4">
+                        {ad.messages?.map((message) => (
+                          <div
+                            key={message.id}
+                            className={`flex ${
+                              message.senderType === 'admin' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[80%] rounded-lg p-3 ${
+                                message.senderType === 'admin'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted'
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <p className="text-xs opacity-70 mt-1">
+                                {format(message.timestamp, 'p')}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type your message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(ad.id, newMessage);
+                          }
+                        }}
+                      />
+                      <Button onClick={() => handleSendMessage(ad.id, newMessage)}>
+                        Send
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={approvalDialog.isOpen} onOpenChange={(open) => setApprovalDialog({ ...approvalDialog, isOpen: open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {approvalDialog.action === 'approve' ? 'Approve Advertisement' : 'Reject Advertisement'}
+            </DialogTitle>
+            <DialogDescription>
+              {approvalDialog.action === 'approve'
+                ? 'Are you sure you want to approve this advertisement? It will be marked as active and visible to users.'
+                : 'Are you sure you want to reject this advertisement? This action cannot be undone.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setApprovalDialog({ isOpen: false, adId: null, action: null })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={approvalDialog.action === 'approve' ? 'default' : 'destructive'}
+              onClick={() => {
+                if (approvalDialog.adId) {
+                  handleUpdateAdStatus(
+                    approvalDialog.adId,
+                    approvalDialog.action === 'approve' ? 'approved' : 'rejected'
+                  );
+                }
+              }}
+            >
+              {approvalDialog.action === 'approve' ? 'Approve' : 'Reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

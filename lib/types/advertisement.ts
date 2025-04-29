@@ -42,6 +42,7 @@ export interface Advertisement {
   type: AdvertisementType;
   status: AdvertisementStatus;
   imageUrl: string;
+  uploadedImage?: File | null;
   url: string;
   targeting: Targeting;
   style: Style;
